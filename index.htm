@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Chat</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{
+      height:100vh;background:#000;color:#fff;
+      font-family:'Inter', system-ui, sans-serif;overflow:hidden;
+    }
+
+    .messages{
+      position:absolute;inset:0;padding:20px 16px 100px 16px;
+      overflow-y:auto;background:transparent;z-index:1;
+      -ms-overflow-style:none;scrollbar-width:none;
+    }
+    .messages::-webkit-scrollbar{display:none;}
+
+    .msg{
+      opacity:0;transform:translateY(10px);
+      animation:soft 0.5s ease-out forwards;
+      max-width:76%;padding:14px 20px;margin-bottom:14px;
+      border-radius:20px;font-size:1.05rem;line-height:1.55;
+      word-wrap:break-word;cursor:pointer;position:relative;
+      transition:transform .2s;
+      width: fit-content;
+    }
+    .msg:hover{transform:translateY(-3px);}
+    @keyframes soft{to{opacity:1;transform:translateY(0);}}
+
+    .sent{
+      background:linear-gradient(135deg, #00d4ff, #00ff9d);
+      color:#000;font-weight:500;
+      margin-left:auto;
+      border-radius:20px 20px 20px 4px;
+      box-shadow:0 4px 15px rgba(0,212,255,0);
+    }
+
+    .received{
+      background:#303030;
+      color:#e0e0e0;
+      margin-right:auto;
+      border-radius:20px 20px 4px 20px;
+      font-size:0.98rem;
+    }
+
+    .copied-toast{
+      position:fixed;top:240px;left:50%;transform:translateX(-50%);
+      background:rgba(0,212,255,0.9);color:#000;font-weight:600;
+      padding:12px 28px;border-radius:16px;z-index:9999;
+      opacity:0;pointer-events:none;transition:opacity .4s;
+    }
+    .copied-toast.show{opacity:1;}
+
+    .input-overlay{
+      position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+      z-index:100;width:100%;max-width:820px;padding:0 16px;
+    }
+    .input-box{
+      background:#111;height:72px;border-radius:22px;
+      border:2px solid #333;display:flex;align-items:center;
+      padding:0 26px;gap:30px;box-shadow:0 8px 30px rgba(0,0,0,0.5);
+    }
+    .input-box:focus-within{
+      border-color:#00d4ff;
+      box-shadow:0 0 0 4px rgb(0, 213, 255);
+    }
+
+    .input-box button{
+      color:#6a6a6a;font-size:1.55rem;
+      background:none;border:none;cursor:pointer;
+      padding:5px;border-radius:12px;transition:.25s;
+    }
+    .input-box button:hover{color:#ffffff;}
+
+    .text-input{
+      flex:1;background:transparent;border:none;outline:none;
+      color:#fff;font-size:1.12rem;
+    }
+    .text-input::placeholder{color:#888;}
+
+    .send-btn i{
+      color:#fff;transition:.3s;
+    }
+    .text-input:not(:placeholder-shown)~.send-btn i{
+      color:#00ff9d;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="messages" id="messages"></div>
+  <div class="copied-toast" id="toast">Copied!</div>
+
+  <div class="input-overlay">
+    <div class="input-box">
+      <button><i class="fas fa-camera"></i></button>
+      <input type="text" id="msgInput" class="text-input" placeholder="اكتب نص أو لصق كود ثنائي..." autocomplete="off">
+      <button><i class="far fa-image"></i></button>
+      <button><i class="far fa-sticky-note"></i></button>
+      <button><i class="fas fa-microphone"></i></button>
+      <button class="send-btn" id="sendBtn"><i class="far fa-paper-plane"></i></button>
+    </div>
+  </div>
+
+  <script>
+    const input = document.getElementById('msgInput');
+    const messages = document.getElementById('messages');
+    const toast = document.getElementById('toast');
+    const plane = document.querySelector('.send-btn i');
+
+    // نص → ثنائي
+    function textToBinary(text) {
+      return [...text].map(char => {
+        return char.charCodeAt(0).toString(2).padStart(8, '0');
+      }).join(' ');
+    }
+
+    // ثنائي → نص
+    function binaryToText(binary) {
+      try {
+        return binary.trim().split(/\s+/).map(bin => {
+          if (/^[01]{8}$/.test(bin)) {
+            return String.fromCharCode(parseInt(bin, 2));
+          }
+          return '';
+        }).join('');
+      } catch (e) {
+        return "خطأ في الكود الثنائي";
+      }
+    }
+
+    // تحديد نوع الرسالة
+    function isBinary(str) {
+      return /^(\s*[01]{8}\s*)+$/.test(str.trim()) && str.trim().split(/\s+/).every(b => /^[01]{8}$/.test(b.trim()));
+    }
+
+    function copy(text) {
+      navigator.clipboard.writeText(text);
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 1400);
+    }
+
+    function send() {
+      let text = input.value.trim();
+      if (!text) return;
+
+      const mine = document.createElement('div');
+      mine.className = 'msg sent';
+      mine.textContent = text;
+      mine.onclick = () => copy(text);
+      messages.appendChild(mine);
+
+      setTimeout(() => {
+        const bot = document.createElement('div');
+        bot.className = 'msg received';
+
+        let response;
+        if (isBinary(text)) {
+          response = binaryToText(text);
+        } else {
+          response = textToBinary(text);
+        }
+
+        bot.textContent = response || "غير مدعوم";
+        bot.onclick = () => copy(response);
+        messages.appendChild(bot);
+        messages.scrollTop = messages.scrollHeight;
+      }, 800);
+
+      messages.scrollTop = messages.scrollHeight;
+      input.value = '';
+      plane.classList.replace('fas','far');
+    }
+
+    input.addEventListener('keypress', e => e.key === 'Enter' && send());
+    document.getElementById('sendBtn').addEventListener('click', send);
+
+    input.addEventListener('input', () => {
+      if (input.value.trim()) {
+        plane.classList.replace('far', 'fas');
+      } else {
+        plane.classList.replace('fas', 'far');
+      }
+    });
+
+    input.focus();
+  </script>
+
+</body>
+</html>
